@@ -32,39 +32,69 @@ demandantes_stats = defaultdict(lambda: {
     'cards': []
 })
 
-# Labels que não são demandantes
+# Labels que não são demandantes e empresas válidas conhecidas
 excluded_labels = ['Em Alteração']
+valid_companies = ['MSB', 'KOGNI', 'EQUANIMUS', 'GOVONE', 'GRIX', 'SIMPLIFIXA', 'SE7TI', 'LSG business hub', 'LSG']
+
+def extract_company_from_text(text):
+    """Extrai nome da empresa do texto do card se mencionado claramente"""
+    text_upper = text.upper()
+    
+    # Verifica menções diretas das empresas no texto
+    for company in valid_companies:
+        if company.upper() in text_upper:
+            # Consolidar variações
+            if company == 'GOVONE':
+                return 'EQUANIMUS'
+            elif company == 'LSG':
+                return 'LSG business hub'
+            return company
+    return None
 
 if 'cards' in data:
     for card in data['cards']:
         # Identificar labels do card
         card_labels = []
+        card_name = card.get('name', '')
+        
+        # Primeiro: verificar labels
         if 'labels' in card:
             for label in card['labels']:
                 label_name = label.get('name', '')
-                if label_name:
+                if label_name and label_name in valid_companies:
                     # Consolidar GOVONE e EQUANIMUS como o mesmo demandante
                     if label_name == 'GOVONE':
                         label_name = 'EQUANIMUS'
+                    elif label_name == 'LSG':
+                        label_name = 'LSG business hub'
                     # Ignorar labels que não são demandantes
                     if label_name not in excluded_labels:
                         card_labels.append(label_name)
+        
+        # Segundo: se não há labels válidos, verificar texto do card
+        if not card_labels:
+            company_from_text = extract_company_from_text(card_name)
+            if company_from_text:
+                card_labels.append(company_from_text)
+        
+        # Se ainda não há empresa identificada, classificar como "Não Identificados"
+        if not card_labels:
+            card_labels.append('Não Identificados')
 
-        # Para cada label, adicionar estatísticas
-        if card_labels:
-            for label_name in card_labels:
-                demandantes_stats[label_name]['total_cards'] += 1
-                if card.get('closed', False):
-                    demandantes_stats[label_name]['cards_fechados'] += 1
-                else:
-                    demandantes_stats[label_name]['cards_abertos'] += 1
+        # Para cada label/empresa, adicionar estatísticas
+        for label_name in card_labels:
+            demandantes_stats[label_name]['total_cards'] += 1
+            if card.get('closed', False):
+                demandantes_stats[label_name]['cards_fechados'] += 1
+            else:
+                demandantes_stats[label_name]['cards_abertos'] += 1
 
-                demandantes_stats[label_name]['cards'].append({
-                    'name': card['name'],
-                    'url': card.get('shortUrl', ''),
-                    'closed': card.get('closed', False),
-                    'list': card.get('idList', '')
-                })
+            demandantes_stats[label_name]['cards'].append({
+                'name': card['name'],
+                'url': card.get('shortUrl', ''),
+                'closed': card.get('closed', False),
+                'list': card.get('idList', '')
+            })
 
 # Mapear listas
 lists_map = {}
